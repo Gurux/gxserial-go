@@ -15,8 +15,8 @@
 //
 // # Construction
 //
-// Use NewGXNet to create a connection with protocol, host and port. Additional
-// options (such as timeout, EOP, tracing) can be configured through setters.
+// Use NewGXSerial to create a connection with used serial port. Additional
+// options (such as EOP, tracing) can be configured through setters.
 //
 // Example
 //
