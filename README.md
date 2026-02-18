@@ -4,7 +4,7 @@ Join the Gurux Community or follow [@Gurux](https://twitter.com/guruxorg "@Gurux
 
 With gurux.serial component you can send data easily syncronously or asyncronously using serial port connection.
 
-Open Source GXNet media component, made by Gurux Ltd, is a part of GXMedias set of media components, which programming interfaces help you implement communication by chosen connection type. Gurux media components also support the following connection types: serial port.
+Open Source gxserial media component, made by Gurux Ltd, is a part of GXMedias set of media components, which programming interfaces help you implement communication by chosen connection type. Gurux media components also support the following connection types: serial port.
 
 For more info check out [Gurux](http://www.gurux.org/ "Gurux").
 
@@ -15,8 +15,8 @@ If you have problems you can ask your questions in Gurux [Forum](http://www.guru
 You can get source codes from http://www.github.com/gurux or add reference to your project:
 
 ```go
-go get github.com/Gurux/gxcommon-go@v1.0.1
-go get github.com/Gurux/gxnet-go@v1.0.5
+go get github.com/Gurux/gxcommon-go
+go get github.com/Gurux/gxserial-go
 ```
 
 Simple example
@@ -53,9 +53,7 @@ media.SetOnReceived(func(m gxcommon.IGXMedia, e gxcommon.ReceiveEventArgs) {
 })
 
 ```
-
 Data can be also send as syncronous if needed.
-
 ```go
 defer media.GetSynchronous()()
 err = media.Send("Hello World!\n", "")
