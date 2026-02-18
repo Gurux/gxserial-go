@@ -20,7 +20,7 @@
 //
 // Example
 //
-//	media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8, gxserial.StopBitsOne, gxserial.ParityNone)
+//	media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8, gxserial.ParityNone, gxserial.StopBitsOne)
 //
 //	media.SetOnReceived(func(m IGXMedia, e ReceiveEventArgs) {
 //	    // handle e.Data(), e.SenderInfo()

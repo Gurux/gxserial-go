@@ -91,13 +91,12 @@ type GXSerial struct {
 	p *message.Printer
 }
 
-// NewGXSerial creates a GXSerial configured with the given protocol, host, and port.
-// It also initializes the internal stop channel used to signal shutdown.
+// NewGXSerial creates a GXSerial configured with the given serial port.
 func NewGXSerial(port string,
 	baudRate gxcommon.BaudRate,
 	dataBits int,
-	stopBits gxcommon.StopBits,
-	parity gxcommon.Parity) *GXSerial {
+	parity gxcommon.Parity,
+	stopBits gxcommon.StopBits) *GXSerial {
 	g := &GXSerial{Port: port, baudRate: baudRate, dataBits: dataBits, stopBits: stopBits, parity: parity, stop: make(chan struct{})}
 	g.Localize(language.AmericanEnglish)
 	g.received = *newGXSynchronousMediaBase()

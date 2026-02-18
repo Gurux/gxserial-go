@@ -36,7 +36,7 @@ It is also good to add listener to listen following events.
 * onPropertyChanged
 
 ```go
-media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8, gxserial.StopBitsOne, gxserial.ParityNone)
+media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8, gxserial.ParityNone, gxserial.StopBitsOne)
 media.open()
 ```
 

@@ -36,7 +36,7 @@ func main() {
 		return
 	}
 
-	media := gxserial.NewGXSerial(*port, br, *dataBits, gxcommon.StopBitsOne, Parity)
+	media := gxserial.NewGXSerial(*port, br, *dataBits, Parity, gxcommon.StopBitsOne)
 	if *lang != "" {
 		tag, err := language.Parse(*lang)
 		if err != nil {
