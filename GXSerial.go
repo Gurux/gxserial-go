@@ -511,6 +511,9 @@ func (g *GXSerial) reader() {
 		if len(ret) != 0 {
 			g.bytesReceived += uint64(len(ret))
 			g.handleData(ret)
+			// Give some time before read next bytes.
+			// In this way we are not reading data one byte at the time.
+			time.Sleep(1 * time.Millisecond)
 		}
 		select {
 		case <-g.stop:
