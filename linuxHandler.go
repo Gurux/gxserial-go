@@ -404,11 +404,18 @@ func (p *port) read() ([]byte, error) {
 	if cnt <= 0 {
 		cnt = 1
 	}
-
 	buf := make([]byte, cnt)
 	n, err := p.f.Read(buf)
 	if err != nil {
 		return nil, err
+	}
+	cnt, _ = p.getBytesToRead()
+	if cnt != 0 {
+		ret, err := p.read()
+		if err != nil {
+			return nil, err
+		}
+		return append(buf[:n], ret...), nil
 	}
 	return buf[:n], nil
 }

@@ -300,13 +300,19 @@ func (p *port) getBytesToRead() (int, error) {
 	var flags uint32
 	var st windows.ComStat
 	if err := windows.ClearCommError(p.h, &flags, &st); err != nil {
-		_ = p.close()
-		return 0, fmt.Errorf("getBytesToRead failed: %w", err)
+		if err != windows.ERROR_INVALID_HANDLE {
+			_ = p.close()
+			return 0, fmt.Errorf("getBytesToRead failed: %w", err)
+		}
+		return 0, nil
 	}
 	return int(st.CBInQue), nil
 }
 
 func (p *port) read() ([]byte, error) {
+	if p.closing == 0 {
+		return nil, nil
+	}
 	if !p.isOpen() {
 		return nil, errors.New("serial port is not open")
 	}
@@ -327,12 +333,21 @@ func (p *port) read() ([]byte, error) {
 		return buf[:n], nil
 	}
 	if !errors.Is(err, windows.ERROR_IO_PENDING) {
+		r, err := windows.WaitForSingleObject(p.closing, 1)
+		if p.closing == 0 || r == windows.WAIT_OBJECT_0 && err == nil {
+			//If app is closing.
+			return nil, nil
+		}
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
-
 	handles := []windows.Handle{p.closing, p.ovRead.HEvent}
 	idx, werr := windows.WaitForMultipleObjects(handles, false, windows.INFINITE)
 	if werr != nil {
+		r, err := windows.WaitForSingleObject(p.closing, 1)
+		if p.closing == 0 || r == windows.WAIT_OBJECT_0 && err == nil {
+			//If app is closing.
+			return nil, nil
+		}
 		return nil, fmt.Errorf("read wait failed: %w", werr)
 	}
 	if idx == windows.WAIT_OBJECT_0 {
@@ -342,7 +357,23 @@ func (p *port) read() ([]byte, error) {
 		if errors.Is(gerr, windows.ERROR_OPERATION_ABORTED) {
 			return nil, nil
 		}
+		r, err := windows.WaitForSingleObject(p.closing, 0)
+		if r == windows.WAIT_OBJECT_0 && err == nil {
+			//If app is closing.
+			return nil, nil
+		}
 		return nil, fmt.Errorf("read failed: %w", gerr)
+	}
+	count, err = p.getBytesToRead()
+	if err != nil {
+		return nil, err
+	}
+	if count != 0 {
+		ret, err := p.read()
+		if err != nil {
+			return nil, err
+		}
+		return append(buf[:n], ret...), nil
 	}
 	return buf[:n], nil
 }
