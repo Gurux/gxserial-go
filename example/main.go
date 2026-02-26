@@ -84,7 +84,7 @@ func main() {
 	if *t == "" {
 		fmt.Printf("Trace level, %s!\n", *t)
 	}
-	fmt.Printf("Host port: %s\n", *port)
+	fmt.Printf("Serial port: %s\n", *port)
 	fmt.Printf("Message: '%s'\n", *message)
 	fmt.Printf("Trace level %s\n", media.GetTrace().String())
 	err = media.Open()
@@ -95,7 +95,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Failed to get available serial ports: ", err)
 			return
 		}
-		fmt.Fprintln(os.Stderr, "Available serial ports: "+strings.Join(ret, ","))
+		fmt.Fprintln(os.Stderr, "Available serial ports: "+strings.Join(ret, ", "))
 		return
 	}
 	//Close the connection.
@@ -103,6 +103,7 @@ func main() {
 		if err := media.Close(); err != nil {
 			fmt.Fprintln(os.Stderr, "close failed:", err)
 		}
+		fmt.Printf("Exit\n")
 	}()
 
 	//Send data synchronously.
@@ -129,7 +130,8 @@ func main() {
 		}
 		if ret {
 			fmt.Printf("Sync data: %s\n", r.Reply)
+		} else {
+			fmt.Printf("No reply data.\n")
 		}
 	}()
-	fmt.Printf("Exit\n")
 }

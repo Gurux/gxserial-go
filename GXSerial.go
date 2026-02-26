@@ -416,6 +416,12 @@ func (g *GXSerial) Open() error {
 	if g.s.isOpen() {
 		return nil
 	}
+	select {
+	case <-g.stop:
+		// Recreate stop channel when reopening after Close.
+		g.stop = make(chan struct{})
+	default:
+	}
 	g.statef(false, gxcommon.MediaStateOpening)
 	g.trace(false, gxcommon.TraceTypesInfo, g.p.Sprintf("msg.connecting_to", g.Port))
 	err := openPort(g)
@@ -499,9 +505,14 @@ func (g *GXSerial) reader() {
 	defer g.wg.Done()
 	for {
 		ret, err := g.s.read()
+		if !g.IsOpen() {
+			return
+		}
 		if err != nil {
-			// timeout
-			if (g.stop) != nil {
+			select {
+			case <-g.stop:
+				return
+			default:
 				g.trace(false, gxcommon.TraceTypesError, g.p.Sprintf("msg.connection_failed", err))
 				g.errorf(false, err)
 			}
@@ -510,8 +521,6 @@ func (g *GXSerial) reader() {
 		if len(ret) != 0 {
 			g.bytesReceived += uint64(len(ret))
 			g.handleData(ret)
-		} else if !g.IsOpen() {
-			return
 		}
 		select {
 		case <-g.stop:
@@ -635,64 +644,14 @@ func (g *GXSerial) Close() error {
 //nolint:errcheck
 func init() {
 	// --- English (default) ---
-	message.SetString(language.AmericanEnglish, "msg.closing_connection", "Closing connection to %s")
-	message.SetString(language.AmericanEnglish, "msg.connection_closed", "Connection closed to %s")
-	message.SetString(language.AmericanEnglish, "msg.connection_failed", "Connection failed: %v")
+	message.SetString(language.AmericanEnglish, "msg.closing_connection", "Closing serial port '%s' connection")
+	message.SetString(language.AmericanEnglish, "msg.connection_closed", "Serial port connection '%s' closed")
+	message.SetString(language.AmericanEnglish, "msg.connection_failed", "Serial port connection failed: %v")
 	message.SetString(language.AmericanEnglish, "msg.count_or_eop", "Either Count or EOP must be set")
-	message.SetString(language.AmericanEnglish, "msg.connected_to", "Connected to %s:")
-	message.SetString(language.AmericanEnglish, "msg.connect_failed", "connect to %s: failed: %v")
+	message.SetString(language.AmericanEnglish, "msg.connected_to", "Connected to serial port '%s'")
+	message.SetString(language.AmericanEnglish, "msg.connect_failed", "Connect to serial port '%s' failed: %v")
 	message.SetString(language.AmericanEnglish, "msg.connecting_to", "%s connecting to %s: timeout %d ms")
 	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "No serial port selected. Please select a serial port.")
-
-	// --- German (de) ---
-	message.SetString(language.German, "msg.closing_connection", "Verbindung zu %s: wird geschlossen")
-	message.SetString(language.German, "msg.connection_closed", "Verbindung zu %s: wurde geschlossen")
-	message.SetString(language.German, "msg.connection_failed", "Verbindung fehlgeschlagen: %v")
-	message.SetString(language.German, "msg.count_or_eop", "Entweder Count oder EOP muss gesetzt sein")
-	message.SetString(language.German, "msg.connected_to", "Verbunden mit %s:")
-	message.SetString(language.German, "msg.connect_failed", "Verbindung zu %s: fehlgeschlagen: %v")
-	message.SetString(language.German, "msg.connecting_to", "%s verbindet sich mit %s: timeout %d ms")
-	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "Kein serieller Port ausgewählt. Bitte wählen Sie einen seriellen Port aus.")
-
-	// --- Finnish (fi) ---
-	message.SetString(language.Finnish, "msg.closing_connection", "Suljetaan yhteys kohteeseen %s:")
-	message.SetString(language.Finnish, "msg.connection_closed", "Yhteys suljettu kohteeseen %s:")
-	message.SetString(language.Finnish, "msg.connection_failed", "Yhteyden muodostus epäonnistui: %v")
-	message.SetString(language.Finnish, "msg.count_or_eop", "Joko Count tai EOP on asetettava")
-	message.SetString(language.Finnish, "msg.connected_to", "Yhdistetty kohteeseen %s:")
-	message.SetString(language.Finnish, "msg.connect_failed", "Yhteyden muodostus kohteeseen %s: epäonnistui: %v")
-	message.SetString(language.Finnish, "msg.connecting_to", "%s yhdistetään kohteeseen %s: timeout %d ms")
-	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "Sarjaporttia ei ole valittu. Valitse sarjaportti.")
-
-	// --- Swedish (sv) ---
-	message.SetString(language.Swedish, "msg.closing_connection", "Stänger anslutning till %s:")
-	message.SetString(language.Swedish, "msg.connection_closed", "Anslutning stängd till %s:")
-	message.SetString(language.Swedish, "msg.connection_failed", "Anslutningen misslyckades: %v")
-	message.SetString(language.Swedish, "msg.count_or_eop", "Antingen Count eller EOP måste anges")
-	message.SetString(language.Swedish, "msg.connected_to", "Ansluten till %s:")
-	message.SetString(language.Swedish, "msg.connect_failed", "Anslutning till %s: misslyckades: %v")
-	message.SetString(language.Swedish, "msg.connecting_to", "%s ansluter till %s: timeout %d ms")
-	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "Ingen seriell port vald. Välj en seriell port.")
-
-	// --- Spanish (es) ---
-	message.SetString(language.Spanish, "msg.closing_connection", "Cerrando conexión con %s:")
-	message.SetString(language.Spanish, "msg.connection_closed", "Conexión cerrada con %s:")
-	message.SetString(language.Spanish, "msg.connection_failed", "Error de conexión: %v")
-	message.SetString(language.Spanish, "msg.count_or_eop", "Se debe establecer Count o EOP")
-	message.SetString(language.Spanish, "msg.connected_to", "Conectado a %s:")
-	message.SetString(language.Spanish, "msg.connect_failed", "Error al conectar con %s:: %v")
-	message.SetString(language.Spanish, "msg.connecting_to", "%s conectando a %s: timeout %d ms")
-	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "No se ha seleccionado ningún puerto serie. Seleccione un puerto serie.")
-
-	// --- Estonian (et) ---
-	message.SetString(language.Estonian, "msg.closing_connection", "Suletakse ühendus sihtkohta %s:")
-	message.SetString(language.Estonian, "msg.connection_closed", "Ühendus suleti sihtkohta %s:")
-	message.SetString(language.Estonian, "msg.connection_failed", "Ühendus ebaõnnestus: %v")
-	message.SetString(language.Estonian, "msg.count_or_eop", "Count või EOP peab olema määratud")
-	message.SetString(language.Estonian, "msg.connected_to", "Ühendatud sihtkohta %s:")
-	message.SetString(language.Estonian, "msg.connect_failed", "Ühendamine sihtkohta %s: ebaõnnestus: %v")
-	message.SetString(language.Estonian, "msg.connecting_to", "%s ühendatakse sihtkohta %s: timeout %d ms")
-	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "Ühtegi jadaporti pole valitud. Palun valige jadaport.")
 }
 
 // Localize messages for the specified language.

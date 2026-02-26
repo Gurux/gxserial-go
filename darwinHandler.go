@@ -1,4 +1,4 @@
-//go:build linux
+//go:build darwin
 
 package gxserial
 
@@ -53,7 +53,7 @@ type port struct {
 	w  *os.File
 }
 
-// toUnitBaudrate maps a baud rate to the corresponding constant in the unix package.
+// toUnitBaudrate maps a baud rate to the corresponding constant in the mac package.
 var toUnitBaudrate = map[int]uint32{
 	0:      unix.B0,
 	50:     unix.B50,
@@ -75,33 +75,23 @@ var toUnitBaudrate = map[int]uint32{
 	115200: unix.B115200,
 }
 
-func (p *port) isOpen() bool {
-	return p.f != nil
-}
-
-// getPortNames returns a list of available serial port device paths on Linux.
+// getPortNames returns a list of available serial port device paths on macOS.
 func getPortNames() ([]string, error) {
 	patterns := []string{
-		"/dev/ttyS*",
-		"/dev/ttyUSB*",
-		"/dev/ttyXRUSB*",
-		"/dev/ttyACM*",
-		"/dev/ttyAMA*",
-		"/dev/rfcomm*",
-		"/dev/ttyAP*",
+		"/dev/tty.*",
+		"/dev/cu.*",
 	}
 
 	var devices []string
+	seen := make(map[string]struct{})
 	for _, pattern := range patterns {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return nil, err
 		}
 		for _, device := range matches {
-			name := filepath.Base(device)
-			sysPath := filepath.Join("/sys/class/tty", name, "device")
-
-			if _, err := os.Stat(sysPath); err == nil {
+			if _, ok := seen[device]; !ok {
+				seen[device] = struct{}{}
 				devices = append(devices, device)
 			}
 		}
@@ -119,7 +109,7 @@ func openPort(cfg *GXSerial) error {
 	cfg.s = port{f: f, fd: fd}
 
 	// (iflag, oflag, cflag, lflag, ispeed, ospeed, cc) = tcgetattr
-	t, err := unix.IoctlGetTermios(fd, unix.TCGETS)
+	t, err := unix.IoctlGetTermios(fd, unix.TIOCGETA)
 	if err != nil {
 		cfg.s.close()
 		return err
@@ -130,8 +120,8 @@ func openPort(cfg *GXSerial) error {
 	t.Iflag &^= unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IGNBRK
 	// Baud rate:
 	speed := toUnitBaudrate[int(cfg.baudRate)]
-	t.Ispeed = speed
-	t.Ospeed = speed
+	t.Ispeed = uint64(speed)
+	t.Ospeed = uint64(speed)
 	// Databits:
 	t.Cflag &^= unix.CSIZE
 	switch cfg.dataBits {
@@ -163,7 +153,7 @@ func openPort(cfg *GXSerial) error {
 	t.Iflag &^= unix.INPCK | unix.ISTRIP
 
 	const CMSPAR = 0x40000000
-	hasCMSPAR := true
+	hasCMSPAR := false
 	t.Cflag &^= unix.PARENB | unix.PARODD
 	if hasCMSPAR {
 		t.Cflag &^= CMSPAR
@@ -203,11 +193,12 @@ func openPort(cfg *GXSerial) error {
 
 	t.Iflag &^= unix.IXON | unix.IXOFF
 	t.Cflag &^= unix.CRTSCTS
-	if err := unix.IoctlSetTermios(fd, unix.TCSETS, t); err != nil {
+	if err := unix.IoctlSetTermios(fd, unix.TIOCSETA, t); err != nil {
 		cfg.s.close()
 		return err
 	}
-	if err := unix.IoctlSetInt(fd, unix.TCFLSH, unix.TCIFLUSH); err != nil {
+	if err := ioctlSetIntPointer(fd, unix.TIOCFLUSH, unix.TCIOFLUSH); err != nil {
+		cfg.s.close()
 		return err
 	}
 	cfg.s.r, cfg.s.w, err = os.Pipe()
@@ -219,23 +210,38 @@ func openPort(cfg *GXSerial) error {
 	return nil
 }
 
+func ioctlSetIntPointer(fd int, req uint, value int) error {
+	v := value
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(unsafe.Pointer(&v)))
+	if errno != 0 {
+		return errno
+	}
+	return nil
+}
+
 func (p *port) close() error {
 	if p == nil {
 		return nil
 	}
 	if p.r != nil {
 		_ = p.r.Close()
+		p.r = nil
 	}
 	if p.w != nil {
 		_ = p.w.Close()
+		p.w = nil
 	}
 	if p.f != nil {
-		err := p.f.Close()
+		f := p.f
 		p.f = nil
 		p.fd = 0
-		return err
+		return f.Close()
 	}
 	return nil
+}
+
+func (p *port) isOpen() bool {
+	return p.f != nil
 }
 
 func (p *port) ensureOpen() error {
@@ -249,7 +255,7 @@ func (p *port) getTermios() (*unix.Termios, error) {
 	if err := p.ensureOpen(); err != nil {
 		return nil, err
 	}
-	t, err := unix.IoctlGetTermios(p.fd, unix.TCGETS)
+	t, err := unix.IoctlGetTermios(p.fd, unix.TIOCGETA)
 	if err != nil {
 		return nil, fmt.Errorf("tcgetattr failed: %w", err)
 	}
@@ -260,7 +266,7 @@ func (p *port) setTermios(value *unix.Termios) error {
 	if err := p.ensureOpen(); err != nil {
 		return err
 	}
-	if err := unix.IoctlSetTermios(p.fd, unix.TCSETS, value); err != nil {
+	if err := unix.IoctlSetTermios(p.fd, unix.TIOCSETA, value); err != nil {
 		return fmt.Errorf("tcsetattr failed: %w", err)
 	}
 	return nil
@@ -275,8 +281,8 @@ func (p *port) setBaudRate(value gxcommon.BaudRate) error {
 	if u == 0 {
 		return fmt.Errorf("setBaudRate failed. unsupported baud: %d", value)
 	}
-	t.Ispeed = u
-	t.Ospeed = u
+	t.Ispeed = uint64(u)
+	t.Ospeed = uint64(u)
 	return p.setTermios(t)
 }
 
@@ -326,9 +332,9 @@ func (p *port) getStopBits() (int, error) {
 		return 0, fmt.Errorf("getStopBits failed. %w", err)
 	}
 	if (t.Cflag & unix.CSTOPB) != 0 {
-		return 1, nil
+		return 2, nil
 	}
-	return 0, nil
+	return 1, nil
 }
 
 func (p *port) setStopBits(value gxcommon.StopBits) error {
@@ -337,10 +343,10 @@ func (p *port) setStopBits(value gxcommon.StopBits) error {
 		return fmt.Errorf("setStopBits failed. %w", err)
 	}
 	t.Cflag &^= unix.CSTOPB
-	if value == gxcommon.StopBitsOne {
+	if value == gxcommon.StopBitsTwo {
 		t.Cflag |= unix.CSTOPB
-	} else if value != 0 {
-		return fmt.Errorf("setStopBits failed. invalid value: %d (use 0 or 1)", value)
+	} else if value != gxcommon.StopBitsOne {
+		return fmt.Errorf("setStopBits failed. invalid value: %d (use StopBitsOne or StopBitsTwo)", value)
 	}
 	return p.setTermios(t)
 }
@@ -349,11 +355,15 @@ func (p *port) getBytesToRead() (int, error) {
 	if err := p.ensureOpen(); err != nil {
 		return 0, err
 	}
-	n, err := unix.IoctlGetInt(p.fd, unix.TIOCINQ)
+	pfds := []unix.PollFd{{Fd: int32(p.fd), Events: unix.POLLIN}}
+	_, err := unix.Poll(pfds, 0)
 	if err != nil {
 		return 0, fmt.Errorf("getBytesToRead failed: %w", err)
 	}
-	return n, nil
+	if (pfds[0].Revents & unix.POLLIN) != 0 {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 func (p *port) getBytesToWrite() (int, error) {
@@ -425,7 +435,8 @@ func (p *port) read() ([]byte, error) {
 		{Fd: int32(p.fd), Events: unix.POLLIN},
 		{Fd: int32(p.r.Fd()), Events: unix.POLLIN},
 	}
-	_, err := unix.Poll(pfds, -1)
+	//For some reasons close might hang sometimes if infinity value is used.
+	_, err := unix.Poll(pfds, 100)
 	if err != nil {
 		return nil, err
 	}
