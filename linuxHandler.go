@@ -73,6 +73,20 @@ var toUnitBaudrate = map[int]uint32{
 	38400:  unix.B38400,
 	57600:  unix.B57600,
 	115200: unix.B115200,
+	230400: unix.B230400,
+	460800: unix.B460800,
+	921600: unix.B921600,
+}
+
+func applyTermiosSpeed(t *unix.Termios, speed uint32) {
+	t.Cflag &^= unix.CBAUD
+	t.Cflag |= speed
+	t.Ispeed = speed
+	t.Ospeed = speed
+}
+
+func isInterruptedSyscall(err error) bool {
+	return errors.Is(err, unix.EINTR)
 }
 
 func (p *port) isOpen() bool {
@@ -128,10 +142,13 @@ func openPort(cfg *GXSerial) error {
 	t.Lflag &^= unix.ICANON | unix.ECHO | unix.ECHOE | unix.ECHOK | unix.ECHONL | unix.ISIG | unix.IEXTEN
 	t.Oflag &^= unix.OPOST | unix.ONLCR | unix.OCRNL
 	t.Iflag &^= unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IGNBRK
-	// Baud rate:
-	speed := toUnitBaudrate[int(cfg.baudRate)]
-	t.Ispeed = speed
-	t.Ospeed = speed
+	// Baud rate.
+	speed, ok := toUnitBaudrate[int(cfg.baudRate)]
+	if !ok || speed == unix.B0 {
+		cfg.s.close()
+		return fmt.Errorf("open failed. unsupported baud: %d", cfg.baudRate)
+	}
+	applyTermiosSpeed(t, speed)
 	// Databits:
 	t.Cflag &^= unix.CSIZE
 	switch cfg.dataBits {
@@ -271,12 +288,11 @@ func (p *port) setBaudRate(value gxcommon.BaudRate) error {
 	if err != nil {
 		return fmt.Errorf("setBaudRate failed. %w", err)
 	}
-	u := toUnitBaudrate[int(value)]
-	if u == 0 {
+	u, ok := toUnitBaudrate[int(value)]
+	if !ok || u == unix.B0 {
 		return fmt.Errorf("setBaudRate failed. unsupported baud: %d", value)
 	}
-	t.Ispeed = u
-	t.Ospeed = u
+	applyTermiosSpeed(t, u)
 	return p.setTermios(t)
 }
 
@@ -326,9 +342,9 @@ func (p *port) getStopBits() (int, error) {
 		return 0, fmt.Errorf("getStopBits failed. %w", err)
 	}
 	if (t.Cflag & unix.CSTOPB) != 0 {
-		return 1, nil
+		return 2, nil
 	}
-	return 0, nil
+	return 1, nil
 }
 
 func (p *port) setStopBits(value gxcommon.StopBits) error {
@@ -336,11 +352,13 @@ func (p *port) setStopBits(value gxcommon.StopBits) error {
 	if err != nil {
 		return fmt.Errorf("setStopBits failed. %w", err)
 	}
-	t.Cflag &^= unix.CSTOPB
-	if value == gxcommon.StopBitsOne {
+	switch value {
+	case gxcommon.StopBitsOne:
+		t.Cflag &^= unix.CSTOPB
+	case gxcommon.StopBitsTwo:
 		t.Cflag |= unix.CSTOPB
-	} else if value != 0 {
-		return fmt.Errorf("setStopBits failed. invalid value: %d (use 0 or 1)", value)
+	default:
+		return fmt.Errorf("setStopBits failed. invalid value: %d (use StopBitsOne or StopBitsTwo)", value)
 	}
 	return p.setTermios(t)
 }
@@ -425,8 +443,15 @@ func (p *port) read() ([]byte, error) {
 		{Fd: int32(p.fd), Events: unix.POLLIN},
 		{Fd: int32(p.r.Fd()), Events: unix.POLLIN},
 	}
-	_, err := unix.Poll(pfds, -1)
-	if err != nil {
+	var err error
+	for {
+		_, err = unix.Poll(pfds, -1)
+		if err == nil {
+			break
+		}
+		if isInterruptedSyscall(err) {
+			continue
+		}
 		return nil, err
 	}
 	if (pfds[1].Revents & unix.POLLIN) != 0 {
@@ -438,8 +463,15 @@ func (p *port) read() ([]byte, error) {
 		cnt = 1
 	}
 	buf := make([]byte, cnt)
-	n, err := p.f.Read(buf)
-	if err != nil {
+	n := 0
+	for {
+		n, err = p.f.Read(buf)
+		if err == nil {
+			break
+		}
+		if isInterruptedSyscall(err) {
+			continue
+		}
 		return nil, err
 	}
 	cnt, _ = p.getBytesToRead()
@@ -457,5 +489,14 @@ func (p *port) write(data []byte) (int, error) {
 	if err := p.ensureOpen(); err != nil {
 		return 0, err
 	}
-	return p.f.Write(data)
+	for {
+		n, err := p.f.Write(data)
+		if err == nil {
+			return n, nil
+		}
+		if isInterruptedSyscall(err) {
+			continue
+		}
+		return n, err
+	}
 }
