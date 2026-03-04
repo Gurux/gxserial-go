@@ -6,6 +6,11 @@ With gurux.serial component you can send data easily syncronously or asyncronous
 
 Open Source gxserial media component, made by Gurux Ltd, is a part of GXMedias set of media components, which programming interfaces help you implement communication by chosen connection type. Gurux media components also support the following connection types: serial port.
 
+The Gurux serial media component supports the following platforms:
+* Windows
+* Linux
+* macOS
+
 For more info check out [Gurux](http://www.gurux.org/ "Gurux").
 
 We are updating documentation on Gurux web page. 
