@@ -50,7 +50,8 @@ import (
 	"golang.org/x/text/message"
 )
 
-// GXSerial holds connection configuration and tracing settings for a network media.
+// GXSerial implements serial-port-based media that satisfies gxcommon.IGXMedia.
+// It stores serial configuration, I/O counters, event callbacks, and trace settings.
 type GXSerial struct {
 	Port     string
 	baudRate gxcommon.BaudRate
@@ -91,29 +92,39 @@ type GXSerial struct {
 	p *message.Printer
 }
 
-// NewGXSerial creates a GXSerial configured with the given serial port.
+// NewGXSerial creates a GXSerial with the given serial settings.
+// The returned instance uses American English localization by default for error messages.
+//
+// Example:
+//
+//	media := NewGXSerial("COM1", gxcommon.BaudRate(9600), 8, gxcommon.ParityNone, gxcommon.StopBitsOne)
+//	if err := media.Open(); err != nil {
+//		// handle open error
+//	}
+//	defer media.Close()
 func NewGXSerial(port string,
 	baudRate gxcommon.BaudRate,
 	dataBits int,
 	parity gxcommon.Parity,
 	stopBits gxcommon.StopBits) *GXSerial {
 	g := &GXSerial{Port: port, baudRate: baudRate, dataBits: dataBits, stopBits: stopBits, parity: parity, stop: make(chan struct{})}
-	g.Localize(language.AmericanEnglish)
 	g.received = *newGXSynchronousMediaBase()
+	g.p = message.NewPrinter(gxcommon.Language())
 	return g
 }
 
-// GetPortNames retrurns list of available serial ports.
+// GetPortNames returns the list of available serial ports.
 func GetPortNames() ([]string, error) {
 	return getPortNames()
 }
 
-// BaudRate returns the used baud rate.
+// BaudRate returns the configured baud rate.
 func (g *GXSerial) BaudRate() gxcommon.BaudRate {
 	return g.baudRate
 }
 
-// SetBaudRate sets the used baud rate.
+// SetBaudRate updates the configured baud rate.
+// If the serial port is already open, the new value is applied immediately.
 func (g *GXSerial) SetBaudRate(value gxcommon.BaudRate) error {
 	g.baudRate = value
 	if g.s.isOpen() {
@@ -122,12 +133,13 @@ func (g *GXSerial) SetBaudRate(value gxcommon.BaudRate) error {
 	return nil
 }
 
-// DataBits returns the amount of the data bits.
+// DataBits returns the configured number of data bits.
 func (g *GXSerial) DataBits() int {
 	return g.dataBits
 }
 
-// SetDataBits  sets the amount of the data bits.
+// SetDataBits updates the configured number of data bits.
+// If the serial port is already open, the new value is applied immediately.
 func (g *GXSerial) SetDataBits(value int) error {
 	g.dataBits = value
 	if g.s.isOpen() {
@@ -136,12 +148,13 @@ func (g *GXSerial) SetDataBits(value int) error {
 	return nil
 }
 
-// StopBits returns used stop bits.
+// StopBits returns the configured stop bits.
 func (g *GXSerial) StopBits() gxcommon.StopBits {
 	return g.stopBits
 }
 
-// SetStopBits sets the used stop bits.
+// SetStopBits updates the configured stop bits.
+// If the serial port is already open, the new value is applied immediately.
 func (g *GXSerial) SetStopBits(value gxcommon.StopBits) error {
 	g.stopBits = value
 	if g.s.isOpen() {
@@ -150,12 +163,13 @@ func (g *GXSerial) SetStopBits(value gxcommon.StopBits) error {
 	return nil
 }
 
-// Parity returns used parity.
+// Parity returns the configured parity mode.
 func (g *GXSerial) Parity() gxcommon.Parity {
 	return g.parity
 }
 
-// SetParity sets the used parity.
+// SetParity updates the configured parity mode.
+// If the serial port is already open, the new value is applied immediately.
 func (g *GXSerial) SetParity(value gxcommon.Parity) error {
 	g.parity = value
 	if g.s.isOpen() {
@@ -164,7 +178,8 @@ func (g *GXSerial) SetParity(value gxcommon.Parity) error {
 	return nil
 }
 
-// GetBytesToRead returns the number of bytes currently available to read.
+// GetBytesToRead returns bytes currently available in the read buffer.
+// If the port is closed, zero is returned.
 func (g *GXSerial) GetBytesToRead() (int, error) {
 	if g.s.isOpen() {
 		return g.s.getBytesToRead()
@@ -172,7 +187,8 @@ func (g *GXSerial) GetBytesToRead() (int, error) {
 	return 0, nil
 }
 
-// GetBytesToWrite returns the number of bytes currently available to write.
+// GetBytesToWrite returns bytes currently queued in the write buffer.
+// If the port is closed, zero is returned.
 func (g *GXSerial) GetBytesToWrite() (int, error) {
 	if g.s.isOpen() {
 		return g.s.getBytesToWrite()
@@ -180,22 +196,23 @@ func (g *GXSerial) GetBytesToWrite() (int, error) {
 	return 0, nil
 }
 
-// String implements IGXMedia
+// String returns the serial settings as a human-readable string.
 func (g *GXSerial) String() string {
 	return fmt.Sprintf("%s %s %d %s %s", g.Port, g.baudRate, g.dataBits, g.stopBits, g.parity)
 }
 
-// GetName implements IGXMedia
+// GetName returns the media name, which is the configured serial port.
 func (g *GXSerial) GetName() string {
 	return fmt.Sprint(g.Port)
 }
 
-// IsOpen implements IGXMedia
+// IsOpen reports whether the serial port is currently open.
 func (g *GXSerial) IsOpen() bool {
 	return g.s.isOpen()
 }
 
-// Copy implements IGXMedia
+// Copy copies serial configuration and trace settings into target.
+// Target must be *GXSerial.
 func (g *GXSerial) Copy(target gxcommon.IGXMedia) error {
 	switch dst := target.(type) {
 	case *GXSerial:
@@ -212,7 +229,7 @@ func (g *GXSerial) Copy(target gxcommon.IGXMedia) error {
 	return nil
 }
 
-// GetMediaType implements IGXMedia
+// GetMediaType returns the media type name.
 func (g *GXSerial) GetMediaType() string {
 	return "Serial"
 }
@@ -225,7 +242,7 @@ func xmlEscape(s string) string {
 	return buf.String()
 }
 
-// GetSettings implements IGXMedia
+// GetSettings serializes current serial settings into an XML fragment.
 func (g *GXSerial) GetSettings() string {
 	var b strings.Builder
 	if g.Port != "" {
@@ -246,7 +263,8 @@ func (g *GXSerial) GetSettings() string {
 	return b.String()
 }
 
-// SetSettings implements IGXMedia
+// SetSettings loads serial settings from an XML fragment.
+// Unknown tags are ignored.
 func (g *GXSerial) SetSettings(value string) error {
 	if strings.TrimSpace(value) == "" {
 		return nil
@@ -313,7 +331,8 @@ func (g *GXSerial) SetSettings(value string) error {
 	return nil
 }
 
-// GetSynchronous implements IGXMedia
+// GetSynchronous enables synchronous receive mode and returns a restore function.
+// Callers should defer the returned function to restore asynchronous mode.
 func (g *GXSerial) GetSynchronous() func() {
 	g.mu.Lock()
 	g.synchronous = true
@@ -325,34 +344,35 @@ func (g *GXSerial) GetSynchronous() func() {
 	}
 }
 
-// IsSynchronous implements IGXMedia
+// IsSynchronous reports whether synchronous receive mode is enabled.
 func (g *GXSerial) IsSynchronous() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.synchronous
 }
 
-// ResetSynchronousBuffer implements IGXMedia
+// ResetSynchronousBuffer resets buffered synchronous receive state.
+// This implementation is currently a no-op.
 func (g *GXSerial) ResetSynchronousBuffer() {
 }
 
-// GetBytesSent implements IGXMedia
+// GetBytesSent returns the total number of bytes sent.
 func (g *GXSerial) GetBytesSent() uint64 {
 	return g.bytesSent
 }
 
-// GetBytesReceived implements IGXMedia
+// GetBytesReceived returns the total number of bytes received.
 func (g *GXSerial) GetBytesReceived() uint64 {
 	return g.bytesReceived
 }
 
-// ResetByteCounters implements IGXMedia
+// ResetByteCounters resets sent and received byte counters to zero.
 func (g *GXSerial) ResetByteCounters() {
 	g.bytesSent = 0
 	g.bytesReceived = 0
 }
 
-// Validate implements IGXMedia
+// Validate checks that required serial settings are present.
 func (g *GXSerial) Validate() error {
 	if g.Port == "" {
 		return errors.New(g.p.Sprintf("msg.no_serial_port_selected"))
@@ -360,56 +380,57 @@ func (g *GXSerial) Validate() error {
 	return nil
 }
 
-// SetEop implements IGXMedia
+// SetEop sets the end-of-packet marker used by Receive.
 func (g *GXSerial) SetEop(eop any) {
 	g.eop = eop
 }
 
-// GetEop implements IGXMedia
+// GetEop returns the configured end-of-packet marker.
 func (g *GXSerial) GetEop() any {
 	return g.eop
 }
 
-// GetTrace implements IGXMedia
+// GetTrace returns the current trace level.
 func (g *GXSerial) GetTrace() gxcommon.TraceLevel {
 	return g.traceLevel
 }
 
-// SetTrace implements IGXMedia
+// SetTrace sets the current trace level.
 func (g *GXSerial) SetTrace(traceLevel gxcommon.TraceLevel) error {
 	g.traceLevel = traceLevel
 	return nil
 }
 
-// SetOnReceived implements IGXMedia
+// SetOnReceived sets the callback for asynchronously received data.
 func (g *GXSerial) SetOnReceived(value gxcommon.ReceivedEventHandler) {
 	g.mu.Lock()
 	g.onReceive = value
 	g.mu.Unlock()
 }
 
-// SetOnError implements IGXMedia
+// SetOnError sets the callback for asynchronous media errors.
 func (g *GXSerial) SetOnError(value gxcommon.ErrorEventHandler) {
 	g.mu.Lock()
 	g.onErr = value
 	g.mu.Unlock()
 }
 
-// SetOnMediaStateChange implements IGXMedia
+// SetOnMediaStateChange sets the callback for media state transitions.
 func (g *GXSerial) SetOnMediaStateChange(value gxcommon.MediaStateHandler) {
 	g.mu.Lock()
 	g.onState = value
 	g.mu.Unlock()
 }
 
-// SetOnTrace implements IGXMedia
+// SetOnTrace sets the callback for trace events.
 func (g *GXSerial) SetOnTrace(value gxcommon.TraceEventHandler) {
 	g.mu.Lock()
 	g.onTrace = value
 	g.mu.Unlock()
 }
 
-// Open implements IGXMedia
+// Open opens the serial port and starts the background reader goroutine.
+// If the port is already open, Open returns nil.
 func (g *GXSerial) Open() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -437,7 +458,8 @@ func (g *GXSerial) Open() error {
 	return nil
 }
 
-// Send implements IGXMedia
+// Send writes data to the serial port and updates byte counters.
+// Receiver is ignored for serial media.
 func (g *GXSerial) Send(data any, receiver string) error {
 	tmp, err := gxcommon.ToBytes(data, binary.BigEndian)
 	if err != nil {
@@ -454,7 +476,8 @@ func (g *GXSerial) Send(data any, receiver string) error {
 	return ret
 }
 
-// Receive implements IGXMedia
+// Receive waits for data according to args and stores the converted value in args.Reply.
+// It returns true when data was received and false on timeout.
 func (g *GXSerial) Receive(args *gxcommon.ReceiveParameters) (bool, error) {
 	if args.EOP == nil && args.Count == 0 && !args.AllData {
 		return false, errors.New(g.p.Sprintf("msg.count_or_eop"))
@@ -620,7 +643,8 @@ func (g *GXSerial) appendData(data []byte) {
 	g.mu.Unlock()
 }
 
-// Close implements IGXMedia
+// Close closes the serial port and waits for the reader goroutine to stop.
+// It is safe to call Close multiple times.
 func (g *GXSerial) Close() error {
 	var err error
 	g.mu.Lock()
@@ -652,10 +676,4 @@ func init() {
 	message.SetString(language.AmericanEnglish, "msg.connect_failed", "Connect to serial port '%s' failed: %v")
 	message.SetString(language.AmericanEnglish, "msg.connecting_to", "%s connecting to %s: timeout %d ms")
 	message.SetString(language.AmericanEnglish, "msg.no_serial_port_selected", "No serial port selected. Please select a serial port.")
-}
-
-// Localize messages for the specified language.
-// No errors is returned if language is not supported.
-func (g *GXSerial) Localize(language language.Tag) {
-	g.p = message.NewPrinter(language)
 }

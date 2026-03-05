@@ -29,6 +29,18 @@ func main() {
 		return
 	}
 
+	//Used language.
+	if *lang != "" {
+		tag, err := language.Parse(*lang)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error parsing language:", err)
+			return
+		}
+		gxcommon.SetLanguage(tag)
+	} else {
+		gxcommon.SetLanguage(gxcommon.CurrentLanguage())
+	}
+
 	br := gxcommon.BaudRate(*baudRate)
 	Parity, err := gxcommon.ParityParse(*parity)
 	if err != nil {
@@ -37,15 +49,6 @@ func main() {
 	}
 
 	media := gxserial.NewGXSerial(*port, br, *dataBits, Parity, gxcommon.StopBitsOne)
-	if *lang != "" {
-		tag, err := language.Parse(*lang)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "error parsing language:", err)
-			return
-		}
-		media.Localize(tag)
-	}
-
 	media.SetOnError(func(m gxcommon.IGXMedia, err error) {
 		// log/handle error
 		fmt.Fprintln(os.Stderr, "error:", err)
