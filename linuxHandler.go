@@ -40,7 +40,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"unsafe"
 
 	"github.com/Gurux/gxcommon-go"
 	"golang.org/x/sys/unix"
@@ -336,17 +335,6 @@ func (p *port) setParity(value gxcommon.Parity) error {
 	return p.setTermios(t)
 }
 
-func (p *port) getStopBits() (int, error) {
-	t, err := p.getTermios()
-	if err != nil {
-		return 0, fmt.Errorf("getStopBits failed. %w", err)
-	}
-	if (t.Cflag & unix.CSTOPB) != 0 {
-		return 2, nil
-	}
-	return 1, nil
-}
-
 func (p *port) setStopBits(value gxcommon.StopBits) error {
 	t, err := p.getTermios()
 	if err != nil {
@@ -383,52 +371,6 @@ func (p *port) getBytesToWrite() (int, error) {
 		return 0, fmt.Errorf("getBytesToWrite failed: %w", err)
 	}
 	return n, nil
-}
-
-func (p *port) getRtsEnable() (bool, error) {
-	if err := p.ensureOpen(); err != nil {
-		return false, err
-	}
-	status, err := unix.IoctlGetInt(p.fd, unix.TIOCMGET)
-	if err != nil {
-		return false, fmt.Errorf("getRtsEnable failed: %w", err)
-	}
-	return (status & unix.TIOCM_RTS) != 0, nil
-}
-
-func (p *port) setRtsEnable(on bool) error {
-	return p.setModemBit(unix.TIOCM_RTS, on)
-}
-
-func (p *port) getDtrEnable() (bool, error) {
-	if err := p.ensureOpen(); err != nil {
-		return false, err
-	}
-	status, err := unix.IoctlGetInt(p.fd, unix.TIOCMGET)
-	if err != nil {
-		return false, fmt.Errorf("getDtrEnable failed: %w", err)
-	}
-	return (status & unix.TIOCM_DTR) != 0, nil
-}
-
-func (p *port) setDtrEnable(on bool) error {
-	return p.setModemBit(unix.TIOCM_DTR, on)
-}
-
-func (p *port) setModemBit(bit int, on bool) error {
-	if err := p.ensureOpen(); err != nil {
-		return err
-	}
-	v := bit
-	req := unix.TIOCMBIC
-	if on {
-		req = unix.TIOCMBIS
-	}
-	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(p.fd), uintptr(req), uintptr(unsafe.Pointer(&v)))
-	if errno != 0 {
-		return fmt.Errorf("set modem bit failed: %v", errno)
-	}
-	return nil
 }
 
 func (p *port) read() ([]byte, error) {

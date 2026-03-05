@@ -1,3 +1,6 @@
+// Command example demonstrates basic usage of the gxserial package for
+// sending and receiving a short message over a serial port.  It is invoked with
+// command line flags to specify port, baud rate, parity, etc.
 package main
 
 import (

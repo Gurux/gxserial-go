@@ -1,32 +1,47 @@
-// Package gxserial provides serial port based media for Gurux components.
-// It implements the common IGXMedia-style contract: open/close a connection,
-// send/receive data (optionally framed by an EOP marker), and emit events for
-// received data, errors, tracing and state changes.
+// Package gxserial provides a cross‑platform serial‑port media implementation
+// used by Gurux components (see https://www.gurux.org).  It satisfies the
+// gxcommon.IGXMedia interface and exposes a simple, Go‑idiomatic API for
+// opening a connection, sending and receiving data, and subscribing to events
+// such as received bytes, trace information, errors and state changes.
 //
-// Features
+// The primary exported type is *GXSerial, which wraps platform‑specific
+// drivers (Windows, Linux, macOS) to present a consistent configuration surface
+// and built‑in helpers such as byte counters, framing support and synchronous
+// receive semantics.
 //
-//   - Configurable serial settings (port, baud rate, data bits, parity, stop bits)
-//   - Synchronous request/response and asynchronous receive callbacks
-//   - Framing: optional EOP (End Of Packet) marker (byte, string or []byte).
-//   - Timeouts: connection and I/O timeouts via time.Duration.
-//   - Tracing: configurable trace level/mask for sent/received/error/info.
-//   - Events: Received, Error, Trace and MediaState callbacks.
-//   - Concurrency: safe for concurrent reads/writes; Close unblocks pending I/O.
+// # Features
 //
-// # Construction
+//   * Configurable serial settings (port name, baud rate, data bits, parity,
+//     stop bits).
+//   * Asynchronous callbacks and optional synchronous request/response mode.
+//   * Framing: optional end‑of‑packet (EOP) marker defined as a byte, string or
+//     arbitrary []byte.  Turning off EOP gives raw stream access.
+//   * Timeouts: connection and I/O timeouts expressed as time.Duration values.
+//   * Tracing: configurable trace level and mask for sent/received/error/info
+//     messages.
+//   * Events: Received, Error, Trace and MediaState handlers; callbacks are
+//     safe for concurrent use.
+//   * Concurrency: safe for concurrent reads and writes; Close unblocks pending
+//     I/O operations.
+//   * Helpers such as GetPortNames to enumerate available serial ports on the
+//     host operating system.
 //
-// Use NewGXSerial to create a connection with used serial port. Additional
-// options (such as EOP, tracing) can be configured through setters.
+// # Usage
 //
-// Example
+// Create a new connection with NewGXSerial and then configure any optional
+// settings before calling Open.  Most examples use asynchronous receive via a
+// callback, but the library also supports a synchronous mode useful for simple
+// request/response protocols.
+//
+// Example:
 //
 //	media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8, gxserial.ParityNone, gxserial.StopBitsOne)
 //
-//	media.SetOnReceived(func(m IGXMedia, e ReceiveEventArgs) {
+//	media.SetOnReceived(func(m gxserial.IGXMedia, e gxserial.ReceiveEventArgs) {
 //	    // handle e.Data(), e.SenderInfo()
 //	})
-//	media.SetOnError(func(m IGXMedia, err error) {
-//	    // log/handle error
+//	media.SetOnError(func(m gxserial.IGXMedia, err error) {
+//	    // log or handle error
 //	})
 //
 //	if err := media.Open(); err != nil {
@@ -34,24 +49,22 @@
 //	}
 //	defer media.Close()
 //
-//	// send bytes; receive happens via the callback or via a blocking Receive.
+//	// send bytes; receive happens via the callback or via blocking Receive.
 //	_, _ = media.Send([]byte{0x01, 0x02, 0x03})
 //
-// # EOP framing
+// # Additional helpers
 //
-// When an EOP is configured, incoming bytes are buffered until the marker is
-// observed. The marker can be a single byte (e.g. 0x7E), a string (e.g. "OK"),
-// or an arbitrary byte slice. Disable EOP to read raw stream data.
+// GetPortNames returns a slice of port names valid for the current platform
+// ("COM1"/"COM2" on Windows, "/dev/ttyUSB0" etc. on Unix‑like systems).
 //
-// # Errors and timeouts
+// # Referencing examples
 //
-// Network and protocol errors are returned from calls or routed to Error
-// handlers. Timeouts follow Go conventions (context/deadline or Duration-based
-// configuration). Error messages are lowercased per Go style guidelines.
+// The repository contains a runnable example under the example/ directory as
+// well as Go examples in the package tests that appear in godoc output.
 //
 // # Notes
 //
-// The zero value of GXNet is not ready for use; always construct via NewGXNet.
-// Long-running work in event handlers should be offloaded to a separate
-// goroutine to avoid blocking I/O paths.
+// The zero value of *GXSerial is not usable; always obtain an instance via
+// NewGXSerial.  Long‑running work in event handlers should be dispatched to a
+// separate goroutine to avoid blocking I/O paths.
 package gxserial

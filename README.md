@@ -2,80 +2,79 @@ See An [Gurux](http://www.gurux.org/ "Gurux") for an overview.
 
 Join the Gurux Community or follow [@Gurux](https://twitter.com/guruxorg "@Gurux") for project updates.
 
-With gurux.serial component you can send data easily syncronously or asyncronously using serial port connection.
+With the gurux.serial component you can send data synchronously or
+asynchronously over a serial port.
 
-Open Source gxserial media component, made by Gurux Ltd, is a part of GXMedias set of media components, which programming interfaces help you implement communication by chosen connection type. Gurux media components also support the following connection types: serial port.
+The open source `gxserial` media component (by Gurux Ltd) is part of the
+GXMedias family.  It exposes a simple programmatic interface that works the
+same across supported platforms:
 
-The Gurux serial media component supports the following platforms:
 * Windows
 * Linux
 * macOS
 
-For more info check out [Gurux](http://www.gurux.org/ "Gurux").
+For complete API documentation refer to the GoDoc site
+(https://pkg.go.dev/github.com/Gurux/gxserial-go) or browse the example in the
+`example/` subdirectory.
 
-We are updating documentation on Gurux web page. 
+Questions can be posted on the Gurux forum:
+http://www.gurux.org/forum
 
-If you have problems you can ask your questions in Gurux [Forum](http://www.gurux.org/forum).
+Installation
+============
 
-You can get source codes from http://www.github.com/gurux or add reference to your project:
-
-```go
+```sh
 go get github.com/Gurux/gxcommon-go
 go get github.com/Gurux/gxserial-go
 ```
 
-Simple example
-=========================== 
-Before use you must set following settings:
-* PortName
-* BaudRate
-* DataBits
-* Parity
-* StopBits
+Quick start
+===========
 
-It is also good to add listener to listen following events.
-* onError
-* onReceived
-* onMediaStateChange
-* onTrace
-* onPropertyChanged
+At a minimum you need to configure the port name and basic serial settings:
 
 ```go
-media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8, gxserial.ParityNone, gxserial.StopBitsOne)
-media.open()
+media := gxserial.NewGXSerial("COM1", gxserial.BaudRate9600, 8,
+    gxserial.ParityNone, gxserial.StopBitsOne)
 ```
 
-Data is send with send command:
+Optional callbacks let you observe errors, received data, state changes and
+trace messages:
 
 ```go
-media.Send("Hello World!", "")
-```
-In default mode received data is coming as asynchronously from OnReceived event.
-Event listener is added like this:
-```go
-media.SetOnReceived(func(m gxcommon.IGXMedia, e gxcommon.ReceiveEventArgs) {
-	fmt.Printf("Async data: %s\n", e.String())
+media.SetOnError(func(m gxcommon.IGXMedia, err error) {
+    log.Println("serial error:", err)
 })
+media.SetOnReceived(func(m gxcommon.IGXMedia, e gxcommon.ReceiveEventArgs) {
+    fmt.Printf("async data: %s\n", e.String())
+})
+```
 
-```
-Data can be also send as syncronous if needed.
+Open the connection before sending or receiving:
+
 ```go
-defer media.GetSynchronous()()
-err = media.Send("Hello World!\n", "")
-if err != nil {
-    fmt.Fprintln(os.Stderr, "error:", err)
-    return
+if err := media.Open(); err != nil {
+    log.Fatal(err)
 }
-r := gxcommon.NewReceiveParameters[string]()
-r.EOP = "\n"
-r.WaitTime = *w
-r.Count = 0
-ret, err := media.Receive(r)
-if err != nil {
-    fmt.Fprintln(os.Stderr, "error returned:", err)
-    return
-}
-if ret {
-    fmt.Printf("Sync data: %s\n", r.Reply)
-}
+defer media.Close()
 ```
+
+Sending is straightforward:
+
+```go
+_, _ = media.Send([]byte("Hello world"), "")
+```
+
+Receiving is normally asynchronous (via the callback above), but you can
+enter synchronous mode with `media.GetSynchronous()` when implementing
+request/response protocols.  See the example program for details.
+
+Helper functions
+----------------
+
+- `gxserial.GetPortNames()` returns a slice of available port names on the
+  current OS (`COM1`, `/dev/ttyUSB0`, etc.).
+
+The API is documented on GoDoc; examples in this README are intentionally
+minimal.
+

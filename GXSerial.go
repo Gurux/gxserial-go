@@ -113,7 +113,9 @@ func NewGXSerial(port string,
 	return g
 }
 
-// GetPortNames returns the list of available serial ports.
+// GetPortNames returns the list of available serial ports for the
+// current operating system.  The returned slice may be empty if no ports are found or an error occurs.
+// Port names are platform‑specific (e.g., "COM1" on Windows, "/dev/ttyUSB0" on Linux).
 func GetPortNames() ([]string, error) {
 	return getPortNames()
 }
@@ -380,22 +382,31 @@ func (g *GXSerial) Validate() error {
 	return nil
 }
 
-// SetEop sets the end-of-packet marker used by Receive.
+// SetEop sets the end-of-packet (EOP) marker used by Receive.  The
+// argument may be any value that gxcommon.ToBytes understands (byte, string,
+// []byte, etc.).  When a non‑nil marker is configured, incoming bytes are
+// buffered until the sequence is observed; nil disables framing and data is
+// delivered raw.
 func (g *GXSerial) SetEop(eop any) {
 	g.eop = eop
 }
 
-// GetEop returns the configured end-of-packet marker.
+// GetEop returns the currently configured end-of-packet marker, or nil if
+// framing is disabled.  The returned value will be the same type provided to
+// SetEop.
 func (g *GXSerial) GetEop() any {
 	return g.eop
 }
 
-// GetTrace returns the current trace level.
+// GetTrace returns the current trace level mask.  Higher levels produce
+// more verbose output via the trace callback (see SetOnTrace).
 func (g *GXSerial) GetTrace() gxcommon.TraceLevel {
 	return g.traceLevel
 }
 
-// SetTrace sets the current trace level.
+// SetTrace configures the trace level mask.  Events with a severity lower
+// than the given level will be ignored.  Trace events are delivered through the
+// callback established with SetOnTrace.
 func (g *GXSerial) SetTrace(traceLevel gxcommon.TraceLevel) error {
 	g.traceLevel = traceLevel
 	return nil
