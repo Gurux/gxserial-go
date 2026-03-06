@@ -504,7 +504,7 @@ func (g *GXSerial) Receive(args *gxcommon.ReceiveParameters) (bool, error) {
 	} else {
 		waitTime = time.Duration(args.WaitTime) * time.Millisecond
 	}
-	index := g.received.Search(terminator, args.Count, waitTime)
+	index := g.received.search(terminator, args.Count, waitTime)
 	if index == -1 {
 		return false, nil
 	}
@@ -513,7 +513,7 @@ func (g *GXSerial) Receive(args *gxcommon.ReceiveParameters) (bool, error) {
 		//Read all data.
 		index = -1
 	}
-	args.Reply, err = gxcommon.BytesToAny2(g.received.Get(index), args.ReplyType, binary.ByteOrder(binary.BigEndian))
+	args.Reply, err = gxcommon.BytesToAny2(g.received.get(index), args.ReplyType, binary.ByteOrder(binary.BigEndian))
 	if err != nil {
 		return false, err
 	}
@@ -648,7 +648,7 @@ func (g *GXSerial) appendData(data []byte) {
 	if len(data) == 0 {
 		return
 	}
-	g.received.Append(data)
+	g.received.append(data)
 	g.mu.Lock()
 	g.receivedSize += len(data)
 	g.mu.Unlock()
