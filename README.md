@@ -24,7 +24,6 @@ Installation
 ============
 
 ```sh
-go get github.com/Gurux/gxcommon-go
 go get github.com/Gurux/gxserial-go
 ```
 

@@ -399,8 +399,10 @@ func (p *port) read() ([]byte, error) {
 	if (pfds[1].Revents & unix.POLLIN) != 0 {
 		return nil, nil
 	}
-
-	cnt, _ := p.getBytesToRead()
+	cnt, err := p.getBytesToRead()
+	if err != nil {
+		return nil, err
+	}
 	if cnt <= 0 {
 		cnt = 1
 	}
@@ -416,7 +418,10 @@ func (p *port) read() ([]byte, error) {
 		}
 		return nil, err
 	}
-	cnt, _ = p.getBytesToRead()
+	cnt, err = p.getBytesToRead()
+	if err != nil {
+		return nil, err
+	}
 	if cnt != 0 {
 		ret, err := p.read()
 		if err != nil {
