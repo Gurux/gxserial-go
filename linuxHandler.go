@@ -386,15 +386,22 @@ func (p *port) read() ([]byte, error) {
 		{Fd: int32(p.r.Fd()), Events: unix.POLLIN},
 	}
 	var err error
+	var n int
 	for {
-		_, err = unix.Poll(pfds, -1)
-		if err == nil {
+		n, err = unix.Poll(pfds, 1000)
+		if err != nil {
+			if isInterruptedSyscall(err) {
+				continue
+			}
+			return nil, err
+		}
+		if err = p.ensureOpen(); err != nil {
+			return nil, err
+		}
+		//n == 0 means timeout, but we want to check if the port is still open before returning.
+		if n != 0 {
 			break
 		}
-		if isInterruptedSyscall(err) {
-			continue
-		}
-		return nil, err
 	}
 	if (pfds[1].Revents & unix.POLLIN) != 0 {
 		return nil, nil
@@ -407,7 +414,6 @@ func (p *port) read() ([]byte, error) {
 		cnt = 1
 	}
 	buf := make([]byte, cnt)
-	n := 0
 	for {
 		n, err = p.f.Read(buf)
 		if err == nil {
