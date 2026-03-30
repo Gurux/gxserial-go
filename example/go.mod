@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/Gurux/gxcommon-go v1.0.16
-	github.com/Gurux/gxserial-go v1.0.9
+	github.com/Gurux/gxserial-go v1.0.11
 	golang.org/x/text v0.35.0
 )
 
